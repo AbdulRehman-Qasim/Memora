@@ -56,3 +56,7 @@ skills-lock.json
 
 # Personal documents & certificates
 docs/certificates/
+
+# Next.js build output
+.next/
+next-env.d.ts
