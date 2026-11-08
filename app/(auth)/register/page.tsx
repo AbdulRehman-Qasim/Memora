@@ -107,7 +107,7 @@ export default function RegisterPage() {
   if (isSuccess) {
     return (
       <div className="auth-page-wrapper">
-        <div className="auth-container">
+        <div className="auth-container register-container">
           <div className="auth-card-body success-container">
             <div className="auth-logo">
               <div className="auth-logo-icon">
@@ -135,7 +135,7 @@ export default function RegisterPage() {
 
   return (
     <div className="auth-page-wrapper">
-      <div className="auth-container">
+      <div className="auth-container register-container">
         <div className="auth-card-body">
           <div className="auth-logo">
             <div className="auth-logo-icon">

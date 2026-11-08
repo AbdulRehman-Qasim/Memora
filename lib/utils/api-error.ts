@@ -34,6 +34,9 @@ export const handleApiError = (error: unknown) => {
       statusCode = 503;
       message = 'Service Unavailable';
     }
+  } else if (error instanceof Prisma.PrismaClientInitializationError) {
+    statusCode = 503;
+    message = 'Database connection failed. Please ensure your PostgreSQL database is reachable and DATABASE_URL is configured in .env.';
   } else if (error instanceof Prisma.PrismaClientValidationError) {
     statusCode = 400;
     message = 'Database validation error';

@@ -83,7 +83,7 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page-wrapper">
-      <div className="auth-container">
+      <div className="auth-container login-container">
         <div className="auth-card-body">
           <div className="auth-logo">
             <div className="auth-logo-icon">
