@@ -1,0 +1,26 @@
+{
+  "name": "memoora-monorepo",
+  "version": "1.0.0",
+  "description": "Unified repository for Memoora - MERN Notes Application",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend && npm install",
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"blue,green\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build": "npm run build:frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "npm test --prefix backend",
+    "test:frontend": "npm test --prefix frontend",
+    "lint": "npm run lint:frontend",
+    "lint:frontend": "npm run lint --prefix frontend",
+    "type-check": "npm run type-check:backend",
+    "type-check:backend": "npm run type-check --prefix backend",
+    "db:push": "node -e \"require('child_process').execSync('npx prisma db push', { cwd: 'backend', stdio: 'inherit' })\"",
+    "db:generate": "node -e \"require('child_process').execSync('npx prisma generate', { cwd: 'backend', stdio: 'inherit' })\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

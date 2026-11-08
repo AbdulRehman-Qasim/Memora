@@ -1,120 +1,185 @@
-# Memoora - MERN Notes App
+# Memoora - Unified Monorepo (MERN Notes Application)
 
 ## 1. Project Overview
-Memoora is a full-stack Notes application built with the MERN stack (MongoDB replaced with PostgreSQL via Prisma). It allows users to securely register, log in, and manage their personal notes with a rich text editor.
+Memoora is a production-grade full-stack personal notes application built using a unified Monorepo structure. It pairs a **React 19 / TypeScript / Vite** single-page application with a **Node.js / Express 5 / Prisma / PostgreSQL** REST API, featuring real-time synchronization over **Socket.io**.
 
-## 2. Features
-- **User Authentication:** Secure signup and login with JWT and HTTP-only cookies.
-- **Personalized Notes:** Create, read, update, and delete (CRUD) user-specific notes.
-- **Rich Text Editing:** Format notes with bold, italic, headings, lists, alignments, and strikethrough.
-- **Real-time Updates:** Instant UI updates via Socket.io when notes are modified.
-- **Data Export/Import:** Export notes to CSV and import from CSV.
-- **Form Validation:** Strict input validation using Zod (Frontend) and Express-Validator (Backend).
-- **Responsive UI:** Clean, modern interface tailored for both desktop and mobile viewing.
+---
 
-## 3. Tech Stack
-**Frontend:**
-- React 19 (Vite)
-- React Router DOM
-- Zod (Validation)
-- DOMPurify (Sanitization)
-- Jest & React Testing Library
-- Socket.io Client
+## 2. Monorepo Architecture & Directory Structure
 
-**Backend:**
-- Node.js & Express
-- PostgreSQL (via Prisma ORM)
-- JSON Web Tokens (JWT) & bcrypt
-- Pino (Logging)
-- Mocha & Chai (Testing)
-- Socket.io
+```
+Memora/
+├── backend/                  # Express REST API, Prisma schema, & Socket.io server
+│   ├── prisma/               # Database schema & migrations
+│   ├── src/                  # Controllers, services, routes, middleware, validations, utils
+│   ├── tests/                # Mocha & Chai backend test suites
+│   ├── package.json          # Backend-specific dependencies and scripts
+│   └── .env.example          # Backend environment template
+│
+├── frontend/                 # Vite + React 19 + TypeScript frontend application
+│   ├── public/               # Static assets & icons
+│   ├── src/                  # Components, pages, context, services, types
+│   ├── src/__tests__/        # Jest & React Testing Library test suites
+│   ├── package.json          # Frontend-specific dependencies and scripts
+│   └── .env.example          # Frontend environment template
+│
+├── docs/                     # Architectural, setup, & project documentation
+│   ├── architecture/         # System design & security architecture
+│   ├── api/                  # REST API endpoints documentation
+│   ├── setup/                # Step-by-step setup guides
+│   └── certificates/         # Program documentation & certificates
+│
+├── .github/                  # CI/CD workflows
+├── .coderabbit.yaml          # CodeRabbit review rules
+├── .editorconfig             # Editor configuration standards
+├── .gitignore                # Root gitignore rules
+├── .prettierrc               # Prettier formatting rules
+├── package.json              # Root orchestration & scripts (npm --prefix + concurrently)
+├── README.md                 # Project guide & reference
+└── sonar-project.properties  # SonarQube multi-project configuration
+```
 
-## 4. Project Structure
-The repository is split into two main directories:
-- `frontend/` - Contains the Vite/React application, UI components, pages, and frontend tests.
-- `backend/` - Contains the Node.js API, Prisma schema, controllers, routes, and backend tests.
+---
 
-## 5. Prerequisites
-- Node.js (v18 or higher)
-- PostgreSQL database (e.g., Supabase or local instance)
+## 3. Technology Stack
 
-## 6. Installation & Setup
-Both the frontend and backend manage their own dependencies via separate `package.json` files.
+### Frontend
+- **Framework**: React 19, TypeScript
+- **Tooling**: Vite 8
+- **Routing**: React Router DOM 7
+- **Sanitization & Security**: DOMPurify
+- **Real-Time Client**: Socket.io Client
+- **Notifications**: React Hot Toast
+- **Testing**: Jest 30, React Testing Library, Babel
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repo-url>
-   cd 10Pearls_Project
-   ```
+### Backend
+- **Framework**: Node.js, Express 5
+- **Database & ORM**: PostgreSQL via Prisma ORM 6
+- **Authentication**: JWT (JSON Web Tokens) with `HttpOnly` and `SameSite: Strict` cookies
+- **Security**: Helmet, CORS origin restriction, custom CSRF origin validation
+- **Real-Time Engine**: Socket.io 4.8
+- **Logging**: Pino & Pino-HTTP structured JSON logging
+- **Validation**: Express-Validator
+- **Testing**: Mocha, Chai, Sinon, Supertest
 
-2. **Backend Setup:**
-   ```bash
-   cd backend
-   npm install
-   ```
+---
 
-3. **Frontend Setup:**
-   ```bash
-   cd ../frontend
-   npm install
-   ```
+## 4. Prerequisites
+- **Node.js**: v18.0.0 or higher
+- **npm**: v9.0.0 or higher
+- **PostgreSQL**: Local PostgreSQL instance or cloud database (e.g., Supabase)
 
-## 7. Environment Variables
-You need to configure environment variables for both the backend and frontend. Use the provided `.env.example` files as templates.
+---
+
+## 5. Quickstart & Installation
+
+From the root directory:
+
+```bash
+# 1. Install all dependencies (backend, frontend, and root concurrently)
+npm run install:all
+
+# 2. Configure environment variables
+cp frontend/.env.example frontend/.env
+cp backend/.env.example backend/.env
+```
+
+### Environment Variables Configuration
 
 **Backend (`backend/.env`):**
-- `PORT`: API port (default: 5000)
-- `NODE_ENV`: Application environment (development/production)
-- `LOG_LEVEL`: Logging verbosity (e.g., debug, info)
-- `DATABASE_URL`: PostgreSQL connection string (Transaction pooler)
-- `DIRECT_URL`: PostgreSQL direct connection string (For Prisma migrations)
-- `JWT_SECRET`: Secret key for signing tokens
-- `JWT_EXPIRES_IN`: Token expiration (e.g., 7d)
-- `FRONTEND_URL`: URL of the frontend application (for CORS)
+```ini
+PORT=5000
+NODE_ENV=development
+LOG_LEVEL=debug
+DATABASE_URL="postgresql://user:password@host:port/database?pgbouncer=true"
+DIRECT_URL="postgresql://user:password@host:port/database"
+JWT_SECRET="your_jwt_secret"
+JWT_EXPIRES_IN="7d"
+FRONTEND_URL="http://localhost:5173"
+```
 
 **Frontend (`frontend/.env`):**
-- `VITE_API_BASE_URL`: URL of the backend API (default: http://localhost:5000/api)
+```ini
+VITE_API_BASE_URL=http://localhost:5000/api
+```
 
-## 8. Running the Application
+---
 
-**Start the Backend:**
+## 6. Running the Applications
+
+### Run both applications concurrently (Recommended for development):
 ```bash
-cd backend
-# Run Prisma migrations to set up the database schema
-npx prisma db push
-# Start the development server
 npm run dev
 ```
+- Frontend starts on: `http://localhost:5173`
+- Backend API starts on: `http://localhost:5000`
 
-**Start the Frontend:**
+### Run applications independently:
 ```bash
-cd frontend
-npm run dev
+# Start backend API only
+npm run dev:backend
+
+# Start frontend application only
+npm run dev:frontend
 ```
-The frontend will be available at `http://localhost:5173`.
 
-## 9. Testing
-Testing is configured separately for the frontend and backend.
+---
 
-**Backend Testing (Mocha/Chai):**
+## 7. Database Setup & Migrations
 ```bash
-cd backend
+# Push Prisma schema to the configured PostgreSQL database
+npm run db:push
+
+# Generate Prisma Client
+npm run db:generate
+```
+
+---
+
+## 8. Testing & Quality Checks
+
+Run the automated test suites directly from the root repository:
+
+```bash
+# Run all tests (backend + frontend)
 npm test
+
+# Run backend Mocha/Chai tests only
+npm run test:backend
+
+# Run frontend Jest tests only
+npm run test:frontend
+
+# Run backend TypeScript checks
+npm run type-check
+
+# Run linters across backend and frontend
+npm run lint
+
+# Build frontend production bundle
+npm run build
 ```
 
-**Frontend Testing (Jest):**
+---
+
+## 9. SonarQube Analysis
+SonarQube is configured to analyze both frontend and backend source code and coverage reports:
+```properties
+sonar.sources=backend/src,frontend/src
+sonar.tests=backend/tests,frontend/src/__tests__
+sonar.javascript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info
+```
+Run analysis with your local SonarScanner:
 ```bash
-cd frontend
-npm test
+sonar-scanner
 ```
 
-## 10. Code Quality
-The project utilizes **SonarQube** for continuous inspection of code quality. Configuration is provided via the `sonar-project.properties` file in the root directory. To run the analysis, ensure the SonarScanner is installed and configured with your local or cloud SonarQube instance.
+---
 
-## 11. Git Workflow
-- Development occurs on `feature/*` branches branching off from `develop`.
-- Pull Requests are created to merge features back into `develop`.
-- `main` serves as the production-ready branch.
+## 10. Git Branching & PR Workflow
+- `main`: Production-ready releases.
+- `develop`: Integration branch for completed features.
+- `feature/*`: Dedicated branches for individual features.
+- `chore/*`: Dedicated branches for maintenance and migrations.
 
-## 12. Current Status
-The core application features (Authentication, Notes CRUD, Rich Text Editor, CSV Export/Import) are fully implemented and tested.
+All pull requests are reviewed by CodeRabbit and subject to CI linting and automated test runs.
