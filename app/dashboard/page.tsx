@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useContext, useEffect, useState, useRef, useMemo } from 'react';
+import React, { useContext, useEffect, useState, useRef, useCallback } from 'react';
 import DOMPurify from 'dompurify';
 import { useRouter } from 'next/navigation';
 import { AuthContext } from '@/context/AuthContext';
 import notesService from '@/services/notes.service';
 import { Note } from '@/types/notes.types';
+import { ApiError } from '@/types/auth.types';
 import UserProfileModal from '@/components/UserProfileModal';
 import NoteEditorModal from '@/components/NoteEditorModal';
 import Modal from '@/components/Modal';
@@ -16,6 +17,12 @@ type SortOrder = 'newest' | 'oldest' | 'title-az' | 'title-za';
 interface ImportNoteEntry {
   title: string;
   content: string;
+}
+
+function isImportNoteEntry(value: unknown): value is ImportNoteEntry {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const obj = value as Record<string, unknown>;
+  return typeof obj['title'] === 'string' && obj['title'].trim().length > 0;
 }
 
 function sanitize(html: string): string {
@@ -29,6 +36,12 @@ function sanitize(html: string): string {
   });
 }
 
+const mergeImportedNotes = (prev: Note[], newNotes: Note[]): Note[] => {
+  const map = new Map(prev.map((n) => [n.id, n]));
+  newNotes.forEach((n) => map.set(n.id, n));
+  return Array.from(map.values());
+};
+
 export default function DashboardPage() {
   const { user, loading: authLoading } = useContext(AuthContext);
   const router = useRouter();
@@ -37,34 +50,26 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [createError, setCreateError] = useState('');
-
-  const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [editError, setEditError] = useState('');
-
-  const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
 
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
+
+  const [createError, setCreateError] = useState('');
+  const [editError, setEditError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+
+  const [pinnedNoteIds, setPinnedNoteIds] = useState<string[]>([]);
+  const [activeMenuNoteId, setActiveMenuNoteId] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [pinnedNoteIds, setPinnedNoteIds] = useState<string[]>(() => {
-    if (typeof window === 'undefined' || !user) return [];
-    try {
-      const saved = localStorage.getItem(`memoora_pins_${user.id}`);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -72,26 +77,24 @@ export default function DashboardPage() {
     }
   }, [user, authLoading, router]);
 
-  const fetchNotes = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const response = await notesService.getNotes();
-      if (response.success && response.data) {
-        setNotes(response.data);
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load notes');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (user) {
-      fetchNotes();
+      try {
+        const saved = localStorage.getItem(`memoora_pins_${user.id}`);
+        if (saved) {
+          setPinnedNoteIds(JSON.parse(saved));
+        }
+      } catch {
+        // Ignore parse error
+      }
     }
   }, [user]);
+
+  useEffect(() => {
+    const handleClickOutside = () => setActiveMenuNoteId(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const togglePin = (noteId: string) => {
     setPinnedNoteIds((prev) => {
@@ -99,6 +102,10 @@ export default function DashboardPage() {
       if (newPins.includes(noteId)) {
         newPins = newPins.filter((id) => id !== noteId);
       } else {
+        if (newPins.length >= 3) {
+          toast.error('You can only pin up to 3 notes');
+          return prev;
+        }
         newPins.push(noteId);
       }
       if (user) {
@@ -108,18 +115,70 @@ export default function DashboardPage() {
     });
   };
 
-  const handleCreateNote = async (title: string, content: string) => {
-    setIsCreating(true);
-    setCreateError('');
+  const displayedNotes = notes
+    .filter((note) => {
+      const q = searchQuery.toLowerCase();
+      const plainContent = note.content.replace(/<[^>]+>/g, '').toLowerCase();
+      return note.title.toLowerCase().includes(q) || plainContent.includes(q);
+    })
+    .sort((a, b) => {
+      const aPinned = pinnedNoteIds.includes(a.id);
+      const bPinned = pinnedNoteIds.includes(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+
+      if (sortOrder === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (sortOrder === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (sortOrder === 'title-az') return a.title.localeCompare(b.title);
+      if (sortOrder === 'title-za') return b.title.localeCompare(a.title);
+      return 0;
+    });
+
+  const fetchNotes = useCallback(async () => {
     try {
-      const response = await notesService.createNote({ title, content });
+      setLoading(true);
+      setError('');
+      const response = await notesService.getNotes();
       if (response.success && response.data) {
-        setNotes((prev) => [response.data!, ...prev]);
-        setIsCreateModalOpen(false);
-        toast.success('Note created successfully!');
+        setNotes(response.data);
+      } else {
+        setError(response.error || 'Failed to fetch notes.');
       }
-    } catch (err: any) {
-      setCreateError(err.response?.data?.error || 'Failed to create note');
+    } catch (err) {
+      if (err instanceof ApiError) setError(err.message);
+      else if (err instanceof Error) setError(err.message);
+      else setError('Failed to load notes.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchNotes();
+    }
+  }, [user, fetchNotes]);
+
+  const handleCreateNote = async (title: string, content: string) => {
+    setCreateError('');
+    if (!title.trim()) {
+      setCreateError('Title is required.');
+      return;
+    }
+    setIsCreating(true);
+    try {
+      const response = await notesService.createNote({ title: title.trim(), content: content.trim() });
+      if (response.success && response.data) {
+        setNotes((prev) => [response.data!, ...prev.filter((n) => n.id !== response.data!.id)]);
+        setIsCreateModalOpen(false);
+        toast.success('Note created!');
+      } else {
+        setCreateError(response.error || 'Failed to create note.');
+      }
+    } catch (err) {
+      if (err instanceof ApiError) setCreateError(err.message);
+      else if (err instanceof Error) setCreateError(err.message);
+      else setCreateError('An unexpected error occurred while creating the note.');
     } finally {
       setIsCreating(false);
     }
@@ -127,326 +186,418 @@ export default function DashboardPage() {
 
   const handleUpdateNote = async (title: string, content: string) => {
     if (!editingNote) return;
-    setIsUpdating(true);
     setEditError('');
+    if (!title.trim()) {
+      setEditError('Title is required.');
+      return;
+    }
+    setIsUpdating(true);
     try {
-      const response = await notesService.updateNote(editingNote.id, { title, content });
+      const response = await notesService.updateNote(editingNote.id, { title: title.trim(), content: content.trim() });
       if (response.success && response.data) {
-        setNotes((prev) =>
-          prev.map((n) => (n.id === editingNote.id ? response.data! : n))
-        );
+        const updated = response.data;
+        setNotes((prev) => prev.map((n) => (n.id === editingNote.id ? updated : n)));
         setEditingNote(null);
         toast.success('Note updated!');
+      } else {
+        setEditError(response.error || 'Failed to update note.');
       }
-    } catch (err: any) {
-      setEditError(err.response?.data?.error || 'Failed to update note');
+    } catch (err) {
+      if (err instanceof ApiError) setEditError(err.message);
+      else if (err instanceof Error) setEditError(err.message);
+      else setEditError('An unexpected error occurred while updating the note.');
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const handleDeleteNote = async () => {
+  const handleDeleteClick = (note: Note) => {
+    setNoteToDelete(note);
+  };
+
+  const confirmDelete = async () => {
     if (!noteToDelete) return;
-    setIsDeleting(true);
+    const id = noteToDelete.id;
+    setDeletingNoteId(id);
+    setDeleteError('');
     try {
-      await notesService.deleteNote(noteToDelete.id);
-      setNotes((prev) => prev.filter((n) => n.id !== noteToDelete.id));
-      setPinnedNoteIds((prev) => prev.filter((id) => id !== noteToDelete.id));
-      setNoteToDelete(null);
-      toast.success('Note deleted');
-    } catch {
-      toast.error('Failed to delete note');
+      const response = await notesService.deleteNote(id);
+      if (response.success) {
+        setNotes((prev) => prev.filter((note) => note.id !== id));
+        toast.success('Note deleted');
+      } else {
+        setDeleteError(response.error || 'Failed to delete note.');
+      }
+    } catch (err) {
+      if (err instanceof ApiError) setDeleteError(err.message);
+      else if (err instanceof Error) setDeleteError(err.message);
+      else setDeleteError('An unexpected error occurred while deleting the note.');
     } finally {
-      setIsDeleting(false);
+      setDeletingNoteId(null);
+      setNoteToDelete(null);
     }
   };
 
-  const handleExportCSV = () => {
-    if (notes.length === 0) {
-      toast.error('No notes to export');
+  const handleExport = () => {
+    if (!notes || notes.length === 0) {
+      toast.error('There are no notes available to export.');
       return;
     }
-    const headers = ['ID', 'Title', 'Content', 'Created At', 'Updated At'];
-    const rows = notes.map((n) => [
-      `"${n.id.replace(/"/g, '""')}"`,
-      `"${n.title.replace(/"/g, '""')}"`,
-      `"${n.content.replace(/"/g, '""')}"`,
-      `"${n.createdAt}"`,
-      `"${n.updatedAt}"`,
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+
+    const headers = ['Title', 'Content', 'Created At', 'Updated At'];
+
+    const escapeCsv = (str: string) => {
+      if (str === null || str === undefined) return '""';
+      const strVal = String(str);
+      return `"${strVal.replace(/"/g, '""')}"`;
+    };
+
+    const rows = notes.map((note) => {
+      let plainContent = note.content
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>|<\/div>|<\/h[1-6]>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .trim();
+
+      const txt = document.createElement('textarea');
+      txt.innerHTML = plainContent;
+      plainContent = txt.value;
+
+      const createdAt = new Date(note.createdAt).toISOString().split('T')[0];
+      const updatedAt = new Date(note.updatedAt).toISOString().split('T')[0];
+
+      return [
+        escapeCsv(note.title),
+        escapeCsv(plainContent),
+        escapeCsv(createdAt),
+        escapeCsv(updatedAt),
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `memoora-notes-${new Date().toISOString().slice(0, 10)}.csv`);
+    link.href = url;
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.download = `Memoora-notes-${dateStr}.csv`;
+
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    toast.success('Notes exported as CSV');
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    toast.success('Notes exported successfully.');
   };
 
-  const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const text = event.target?.result as string;
-        const lines = text.split('\n').filter((l) => l.trim().length > 0);
-        if (lines.length < 2) {
-          toast.error('CSV file has no data');
+        const raw: unknown = JSON.parse(event.target?.result as string);
+
+        if (!Array.isArray(raw)) {
+          alert('Invalid file format. Expected a JSON array of notes.');
           return;
         }
 
-        const entries: ImportNoteEntry[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const row = lines[i];
-          const parts = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-          if (parts.length >= 3) {
-            const title = parts[1].replace(/^"|"$/g, '').replace(/""/g, '"').trim();
-            const content = parts[2].replace(/^"|"$/g, '').replace(/""/g, '"').trim();
-            if (title) {
-              entries.push({ title, content });
-            }
-          }
-        }
+        const sanitizedEntries: ImportNoteEntry[] = raw
+          .filter(isImportNoteEntry)
+          .map((entry) => ({
+            title: entry.title.trim(),
+            content: typeof entry.content === 'string' ? entry.content : '',
+          }));
 
-        if (entries.length === 0) {
-          toast.error('No valid notes found in CSV');
+        if (sanitizedEntries.length === 0) {
+          alert('No valid notes found in the file. Each note must have a non-empty title.');
           return;
         }
 
-        const res = await notesService.importNotes(entries);
-        if (res.success && res.data) {
-          setNotes((prev) => [...res.data!, ...prev]);
-          toast.success(`Imported ${res.data.length} notes!`);
+        const response = await notesService.importNotes(sanitizedEntries);
+        if (response.success && response.data) {
+          const newNotes = response.data;
+          setNotes((prev) => mergeImportedNotes(prev, newNotes));
+          toast.success(`Imported ${newNotes.length} notes!`);
         }
       } catch {
-        toast.error('Failed to import notes from CSV');
-      } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        alert('Failed to parse the JSON file. Please make sure it is a valid notes export.');
       }
     };
     reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const processedNotes = useMemo(() => {
-    let result = notes.filter(
-      (n) =>
-        n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        n.content.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    result.sort((a, b) => {
-      const isAPinned = pinnedNoteIds.includes(a.id);
-      const isBPinned = pinnedNoteIds.includes(b.id);
-      if (isAPinned && !isBPinned) return -1;
-      if (!isAPinned && isBPinned) return 1;
-
-      switch (sortOrder) {
-        case 'oldest':
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case 'title-az':
-          return a.title.localeCompare(b.title);
-        case 'title-za':
-          return b.title.localeCompare(a.title);
-        case 'newest':
-        default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
-    });
-
-    return result;
-  }, [notes, searchQuery, sortOrder, pinnedNoteIds]);
-
-  if (authLoading || (!user && loading)) {
+  const renderMainContent = () => {
+    if (loading) {
+      return <div className="loading-state">Loading your workspace...</div>;
+    }
+    if (error) {
+      return (
+        <div className="empty-state-modern">
+          <div className="empty-state-icon">⚠️</div>
+          <h4>Oops, something went wrong</h4>
+          <p>{error}</p>
+          <button type="button" className="btn-primary" onClick={() => window.location.reload()} style={{ marginTop: '1rem' }}>
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    if (notes.length === 0) {
+      return (
+        <div className="empty-state-modern">
+          <div className="empty-state-icon">📝</div>
+          <h4>No notes yet</h4>
+          <p>Your ideas deserve a place to live. Create your first note and start organizing your thoughts.</p>
+          <button type="button" className="btn-primary" onClick={() => setIsCreateModalOpen(true)} style={{ marginTop: '1.5rem' }}>
+            + Create your first note
+          </button>
+        </div>
+      );
+    }
     return (
-      <div className="dashboard-loading" style={{ textAlign: 'center', padding: '4rem' }}>
-        <h3>Loading notebook...</h3>
-      </div>
-    );
-  }
-
-  return (
-    <div className="dashboard-page">
-      <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <div>
-          <h1 className="dashboard-title">My Notes</h1>
-          <p className="dashboard-subtitle">
-            Welcome back, <strong>{user?.name}</strong>!
-          </p>
+      <>
+        <div className="notes-section-header-modern">
+          <h3>Your Notes</h3>
+          <span className="notes-pagination">
+            {displayedNotes.length} / {notes.length}
+          </span>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setIsProfileModalOpen(true)}
-          >
-            Profile
-          </button>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => setIsCreateModalOpen(true)}
-          >
-            + New Note
-          </button>
-        </div>
-      </div>
 
-      <div className="notes-controls" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <input
-          type="text"
-          placeholder="Search notes..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="form-control"
-          style={{ flex: 1, minWidth: '220px' }}
-        />
-        <select
-          value={sortOrder}
-          onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-          className="form-control"
-          style={{ width: 'auto' }}
-        >
-          <option value="newest">Newest First</option>
-          <option value="oldest">Oldest First</option>
-          <option value="title-az">Title (A - Z)</option>
-          <option value="title-za">Title (Z - A)</option>
-        </select>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={handleExportCSV}
-          title="Export notes to CSV"
-        >
-          Export CSV
-        </button>
-        <label className="btn-secondary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
-          Import CSV
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleImportFileChange}
-            style={{ display: 'none' }}
-          />
-        </label>
-      </div>
+        {displayedNotes.length === 0 ? (
+          <div className="empty-state-modern no-results">
+            <p>No notes match your search &ldquo;<strong>{searchQuery}</strong>&rdquo;.</p>
+          </div>
+        ) : (
+          <div className="notes-grid-modern">
+            {displayedNotes.map((note) => (
+              <div key={note.id} className="note-card-modern">
+                <div className="note-card-body-modern">
+                  <div className="note-card-header-modern">
+                    <h4 className="note-card-title-modern">{note.title}</h4>
+                    <div style={{ position: 'relative' }}>
+                      {pinnedNoteIds.includes(note.id) && (
+                        <span style={{ fontSize: '1rem', marginRight: '0.5rem' }}>📌</span>
+                      )}
+                      <button
+                        type="button"
+                        className="card-action-menu-btn"
+                        aria-label="Options"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuNoteId(activeMenuNoteId === note.id ? null : note.id);
+                        }}
+                      >
+                        ⋮
+                      </button>
+                      {activeMenuNoteId === note.id && (
+                        <div className="card-dropdown-menu">
+                          <button
+                            type="button"
+                            className="card-dropdown-item"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePin(note.id);
+                              setActiveMenuNoteId(null);
+                            }}
+                          >
+                            {pinnedNoteIds.includes(note.id) ? 'Unpin Note' : 'Pin Note'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-      {error && <div className="delete-error-banner">{error}</div>}
+                  <div
+                    className="note-card-content-modern"
+                    dangerouslySetInnerHTML={{ __html: sanitize(note.content) }}
+                  />
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem' }}>Fetching notes...</div>
-      ) : processedNotes.length === 0 ? (
-        <div className="no-results">
-          {searchQuery ? 'No notes matched your search query.' : 'You have no notes yet. Create your first note!'}
-        </div>
-      ) : (
-        <div className="notes-grid">
-          {processedNotes.map((note) => {
-            const isPinned = pinnedNoteIds.includes(note.id);
-            return (
-              <div key={note.id} className={`note-card ${isPinned ? 'pinned' : ''}`}>
-                <div className="note-card-header">
-                  <h3 className="note-title">{note.title}</h3>
-                  <button
-                    type="button"
-                    onClick={() => togglePin(note.id)}
-                    className="pin-btn"
-                    title={isPinned ? 'Unpin note' : 'Pin note'}
-                  >
-                    {isPinned ? '📌' : '📍'}
-                  </button>
-                </div>
-                <div
-                  className="note-body"
-                  dangerouslySetInnerHTML={{ __html: sanitize(note.content) }}
-                />
-                <div className="note-card-footer">
-                  <span className="note-date">
-                    {new Date(note.createdAt).toLocaleDateString()}
-                  </span>
-                  <div className="note-card-actions">
-                    <button
-                      type="button"
-                      onClick={() => setEditingNote(note)}
-                      className="note-action-btn"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNoteToDelete(note)}
-                      className="note-action-btn delete-btn"
-                    >
-                      Delete
-                    </button>
+                  <div className="note-card-divider"></div>
+
+                  <div className="note-card-footer-modern">
+                    <span className="note-date">
+                      {new Date(note.createdAt).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </span>
+                    <div className="note-card-actions-modern">
+                      <button
+                        type="button"
+                        className="card-action-btn edit"
+                        onClick={() => setEditingNote(note)}
+                        aria-label={`Edit ${note.title}`}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className={`card-action-btn delete ${deletingNoteId === note.id ? 'deleting' : ''}`}
+                        onClick={() => handleDeleteClick(note)}
+                        disabled={deletingNoteId === note.id}
+                        aria-label={`Delete ${note.title}`}
+                      >
+                        {deletingNoteId === note.id ? '...' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  return (
+    <div className="dashboard-container">
+      <header className="dashboard-header-modern">
+        <div className="dashboard-header-text">
+          <h2 className="dashboard-title">Welcome back, {user?.name || 'User'}</h2>
+          <p className="dashboard-subtitle">
+            Capture ideas, keep your thoughts organized, and pick up where you left off.
+          </p>
+        </div>
+        <div className="dashboard-header-actions">
+          {!loading && !error && (
+            <div className="note-count-pill">
+              <strong>{notes.length}</strong> note{notes.length !== 1 ? 's' : ''}
+            </div>
+          )}
+          <button
+            type="button"
+            className="dash-user-chip"
+            onClick={() => setIsProfileModalOpen(true)}
+            title="Account Settings"
+            aria-label="Open Profile Settings"
+          >
+            <div className="dash-avatar">
+              {(user?.name || 'U').charAt(0).toUpperCase()}
+            </div>
+            <span className="dash-user-name">{user?.name?.split(' ')[0] || 'User'}</span>
+          </button>
+        </div>
+      </header>
+
+      {deleteError && (
+        <div className="delete-error-banner" role="alert">
+          {deleteError}
         </div>
       )}
 
-      {/* Note Editor Modal */}
+      <div className="dashboard-toolbar">
+        <div className="search-bar-modern">
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            placeholder="Search your notes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="notes-search-input-modern"
+            aria-label="Search notes"
+          />
+        </div>
+        <div className="toolbar-actions">
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+            className="notes-sort-select-modern"
+            aria-label="Sort notes"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="title-az">Title (A-Z)</option>
+            <option value="title-za">Title (Z-A)</option>
+          </select>
+          <button type="button" onClick={handleExport} className="toolbar-btn" aria-label="Export notes">
+            Export
+          </button>
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="toolbar-btn" aria-label="Import notes">
+            Import
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImport}
+            accept=".json"
+            style={{ display: 'none' }}
+          />
+        </div>
+      </div>
+
+      <div className="dashboard-main-content">
+        {renderMainContent()}
+      </div>
+
+      {!loading && !error && (
+        <button
+          type="button"
+          className="fab-new-note"
+          onClick={() => setIsCreateModalOpen(true)}
+          aria-label="Create new note"
+          title="New Note"
+        >
+          +
+        </button>
+      )}
+
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
+
       <NoteEditorModal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSubmit={handleCreateNote}
+        onClose={() => { setIsCreateModalOpen(false); setCreateError(''); }}
+        onSave={handleCreateNote}
         isSubmitting={isCreating}
         error={createError}
       />
 
       {editingNote && (
         <NoteEditorModal
-          isOpen={!!editingNote}
-          onClose={() => setEditingNote(null)}
-          onSubmit={handleUpdateNote}
-          initialNote={editingNote}
+          isOpen={true}
+          onClose={() => { setEditingNote(null); setEditError(''); }}
+          onSave={handleUpdateNote}
+          initialTitle={editingNote.title}
+          initialContent={editingNote.content}
           isSubmitting={isUpdating}
           error={editError}
         />
       )}
 
-      {/* User Profile Modal */}
-      <UserProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        user={user}
-      />
-
-      {/* Delete Confirmation Modal */}
-      <Modal
-        isOpen={!!noteToDelete}
-        onClose={() => setNoteToDelete(null)}
-        title="Confirm Deletion"
-      >
-        <p>
-          Are you sure you want to delete note &ldquo;<strong>{noteToDelete?.title}</strong>&rdquo;? This action cannot be undone.
+      <Modal isOpen={!!noteToDelete} onClose={() => setNoteToDelete(null)} title="Confirm Delete">
+        <p style={{ color: 'var(--text)', marginBottom: '1.5rem', marginTop: '0.5rem', lineHeight: '1.6' }}>
+          Are you sure you want to delete the note <strong>&ldquo;{noteToDelete?.title}&rdquo;</strong>? This action cannot be undone.
         </p>
-        <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
-          <button
-            type="button"
-            onClick={() => setNoteToDelete(null)}
-            className="btn-secondary"
-            disabled={isDeleting}
-          >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+          <button className="btn-secondary" onClick={() => setNoteToDelete(null)} style={{ padding: '0.5rem 1rem' }} disabled={deletingNoteId !== null}>
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={handleDeleteNote}
-            className="btn-danger"
-            disabled={isDeleting}
+          <button 
+            className="btn-primary" 
+            onClick={confirmDelete} 
+            disabled={deletingNoteId !== null}
+            style={{ 
+              background: 'var(--danger)', 
+              color: 'white', 
+              border: 'none', 
+              padding: '0.5rem 1rem', 
+              boxShadow: 'none' 
+            }}
           >
-            {isDeleting ? 'Deleting...' : 'Delete Note'}
+            {deletingNoteId !== null ? 'Deleting...' : 'Yes, Delete'}
           </button>
         </div>
       </Modal>
     </div>
   );
 }
-

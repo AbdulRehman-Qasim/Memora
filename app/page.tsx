@@ -1,85 +1,96 @@
 'use client';
 
-import React, { useContext, useEffect } from 'react';
+import React, { useContext } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { AuthContext } from '@/context/AuthContext';
 
 export default function HomePage() {
-  const { user } = useContext(AuthContext);
-  const router = useRouter();
-
-  useEffect(() => {
-    if (user) {
-      router.push('/dashboard');
-    }
-  }, [user, router]);
+  const { isAuthenticated } = useContext(AuthContext);
 
   return (
     <div className="landing-page">
       <main className="landing-main">
         <section className="hero-section">
           <div className="hero-content">
-            <span className="hero-badge">Next-Gen Notes</span>
             <h1 className="hero-headline">
-              Capture your ideas, perfectly organized.
+              Capture your thoughts.<br />
+              Keep them organized.
             </h1>
-            <p className="hero-subheadline">
-              Memoora helps you craft thoughts, organize projects, and stay in
-              sync across all your workflows. Clean, private, and effortlessly
-              powerful.
+            <p className="hero-description">
+              Memoora gives you a simple, focused space to write, organize, and revisit the ideas that matter.
             </p>
-            <div className="hero-cta">
-              <Link href="/register" className="btn-primary">
-                Get Started Free
-              </Link>
-              <Link href="/login" className="btn-secondary">
-                Sign In
-              </Link>
+            <div className="hero-actions">
+              {isAuthenticated ? (
+                <Link href="/dashboard" className="btn-primary">Go to Dashboard</Link>
+              ) : (
+                <>
+                  <Link href="/register" className="btn-primary">Create your first note</Link>
+                  <Link href="/login" className="btn-secondary">Sign in</Link>
+                </>
+              )}
             </div>
           </div>
-          <div className="hero-visual-wrapper">
-            <Image
-              src="/hero-visual.png"
-              alt="Memoora App Interface"
-              width={800}
-              height={450}
-              className="hero-image"
-              priority
-            />
+        </section>
+
+        <section className="hero-visual-section">
+          <div className="hero-visual-container">
+            <img src="/hero-visual.png" alt="Memoora Productivity" className="hero-visual-image" />
           </div>
         </section>
 
         <section className="features-section">
           <div className="features-grid">
-            <div className="feature-card">
-              <div className="feature-icon">✨</div>
-              <h3 className="feature-title">Rich Text Formatting</h3>
-              <p className="feature-desc">
-                Express ideas clearly with headings, bold text, bullet lists,
-                and custom styling.
-              </p>
+            <div className="feature-item">
+              <div className="feature-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </div>
+              <h3>Capture Easily</h3>
+              <p>Write down ideas, meeting notes, tasks, and anything worth remembering.</p>
             </div>
-            <div className="feature-card">
-              <div className="feature-icon">🔒</div>
-              <h3 className="feature-title">Private & Secure</h3>
-              <p className="feature-desc">
-                End-to-end data isolation with strict cookie authentication and
-                scoped database access.
-              </p>
+            <div className="feature-item">
+              <div className="feature-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+              </div>
+              <h3>Stay Organized</h3>
+              <p>Keep your notes in one clean workspace and find what you need quickly.</p>
             </div>
-            <div className="feature-card">
-              <div className="feature-icon">⚡</div>
-              <h3 className="feature-title">Lightning Fast</h3>
-              <p className="feature-desc">
-                Optimized App Router performance, instant searching, pinning,
-                and seamless CSV export/import.
-              </p>
+            <div className="feature-item">
+              <div className="feature-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+              </div>
+              <h3>Edit Anytime</h3>
+              <p>Create, update, and manage your notes without unnecessary complexity.</p>
             </div>
           </div>
         </section>
+
+        <section className="final-cta-section">
+          <h2>Ready to organize your thoughts?</h2>
+          {isAuthenticated ? (
+            <Link href="/dashboard" className="btn-primary">Go to Dashboard</Link>
+          ) : (
+            <Link href="/register" className="btn-primary">Create your first note</Link>
+          )}
+        </section>
       </main>
+      <footer className="landing-footer">
+        <div className="footer-content">
+          <div className="footer-logo">
+            <img src="/memoora-icon.svg" alt="Memoora Icon" style={{ width: '20px', height: '20px' }} />
+            <span>Memoora</span>
+          </div>
+          <p>Your simple space for thoughts and ideas.</p>
+          <div className="footer-copyright">© 2026 Memoora</div>
+        </div>
+      </footer>
     </div>
   );
 }

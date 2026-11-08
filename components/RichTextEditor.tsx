@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import DOMPurify from 'dompurify';
 
 interface RichTextEditorProps {
   value: string;
@@ -10,147 +9,62 @@ interface RichTextEditorProps {
   disabled?: boolean;
 }
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({
-  value,
-  onChange,
-  placeholder = 'Write your note here...',
-  disabled = false,
-}) => {
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder, disabled }) => {
   const editorRef = useRef<HTMLDivElement>(null);
-  const isInternalChange = useRef(false);
 
   useEffect(() => {
-    if (editorRef.current && !isInternalChange.current) {
-      if (editorRef.current.innerHTML !== value) {
-        editorRef.current.innerHTML = value;
-      }
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value;
     }
-    isInternalChange.current = false;
   }, [value]);
 
-  const sanitizeConfig = {
-    ALLOWED_TAGS: [
-      'b',
-      'i',
-      'u',
-      'strong',
-      'em',
-      'ul',
-      'ol',
-      'li',
-      'p',
-      'br',
-      'h1',
-      'h2',
-      'h3',
-      'a',
-    ],
-    ALLOWED_ATTR: ['href', 'rel'],
-    FORCE_BODY: true,
-    ADD_ATTR: ['rel'],
-    FORBID_ATTR: ['style', 'class'],
-  };
-
-  const sanitizeContent = (html: string): string => {
-    if (typeof window === 'undefined') return html;
-    return DOMPurify.sanitize(html, sanitizeConfig);
-  };
-
-  const handleInput = () => {
+  const handleInput = React.useCallback(() => {
     if (editorRef.current) {
-      isInternalChange.current = true;
-      const html = editorRef.current.innerHTML;
-      const clean = sanitizeContent(html);
-      onChange(clean);
+      onChange(editorRef.current.innerHTML);
     }
-  };
+  }, [onChange]);
 
-  const executeCommand = (command: string, arg: string | undefined = undefined) => {
-    if (disabled) return;
+  useEffect(() => {
+    const el = editorRef.current;
+    if (el) {
+      el.addEventListener('input', handleInput);
+      el.addEventListener('blur', handleInput);
+      return () => {
+        el.removeEventListener('input', handleInput);
+        el.removeEventListener('blur', handleInput);
+      };
+    }
+  }, [handleInput]);
+
+  const execCmd = (command: string, arg?: string) => {
     document.execCommand(command, false, arg);
+    editorRef.current?.focus();
     handleInput();
   };
 
-  const handleLink = () => {
-    if (disabled) return;
-    const url = prompt('Enter URL:');
-    if (url) {
-      executeCommand('createLink', url);
-    }
-  };
-
   return (
-    <div className="editor-container">
+    <div className={`editor-container ${disabled ? 'disabled' : ''}`}>
       <div className="editor-toolbar">
-        <button
-          type="button"
-          onClick={() => executeCommand('bold')}
-          className="editor-toolbar-btn"
-          title="Bold"
-          disabled={disabled}
-        >
+        <button type="button" className="editor-toolbar-btn" onClick={() => execCmd('bold')} disabled={disabled} title="Bold">
           <b>B</b>
         </button>
-        <button
-          type="button"
-          onClick={() => executeCommand('italic')}
-          className="editor-toolbar-btn"
-          title="Italic"
-          disabled={disabled}
-        >
+        <button type="button" className="editor-toolbar-btn" onClick={() => execCmd('italic')} disabled={disabled} title="Italic">
           <i>I</i>
         </button>
-        <button
-          type="button"
-          onClick={() => executeCommand('underline')}
-          className="editor-toolbar-btn"
-          title="Underline"
-          disabled={disabled}
-        >
+        <button type="button" className="editor-toolbar-btn" onClick={() => execCmd('underline')} disabled={disabled} title="Underline">
           <u>U</u>
         </button>
-        <button
-          type="button"
-          onClick={() => executeCommand('insertUnorderedList')}
-          className="editor-toolbar-btn"
-          title="Bullet List"
-          disabled={disabled}
-        >
+        <button type="button" className="editor-toolbar-btn" onClick={() => execCmd('insertUnorderedList')} disabled={disabled} title="Bullet List">
           • List
         </button>
-        <button
-          type="button"
-          onClick={() => executeCommand('insertOrderedList')}
-          className="editor-toolbar-btn"
-          title="Numbered List"
-          disabled={disabled}
-        >
+        <button type="button" className="editor-toolbar-btn" onClick={() => execCmd('insertOrderedList')} disabled={disabled} title="Numbered List">
           1. List
-        </button>
-        <button
-          type="button"
-          onClick={() => executeCommand('formatBlock', '<h3>')}
-          className="editor-toolbar-btn"
-          title="Heading"
-          disabled={disabled}
-        >
-          H3
-        </button>
-        <button
-          type="button"
-          onClick={handleLink}
-          className="editor-toolbar-btn"
-          title="Insert Link"
-          disabled={disabled}
-        >
-          Link
         </button>
       </div>
       <div
         ref={editorRef}
-        contentEditable={!disabled}
-        onInput={handleInput}
         className="editor-content"
+        contentEditable={!disabled}
         data-placeholder={placeholder}
       />
     </div>
@@ -158,4 +72,3 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 };
 
 export default RichTextEditor;
-

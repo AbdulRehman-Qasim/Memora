@@ -3,99 +3,71 @@
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import RichTextEditor from './RichTextEditor';
-import { Note } from '@/types/notes.types';
 
 interface NoteEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (title: string, content: string) => Promise<void>;
-  initialNote?: Note | null;
-  isSubmitting: boolean;
+  onSave: (title: string, content: string) => Promise<void>;
+  initialTitle?: string;
+  initialContent?: string;
+  isSubmitting?: boolean;
   error?: string;
 }
 
 const NoteEditorModal: React.FC<NoteEditorModalProps> = ({
   isOpen,
   onClose,
-  onSubmit,
-  initialNote,
-  isSubmitting,
-  error,
+  onSave,
+  initialTitle = '',
+  initialContent = '',
+  isSubmitting = false,
+  error = '',
 }) => {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+  const [title, setTitle] = useState(initialTitle);
+  const [content, setContent] = useState(initialContent);
 
   useEffect(() => {
-    if (initialNote) {
-      setTitle(initialNote.title);
-      setContent(initialNote.content);
-    } else {
-      setTitle('');
-      setContent('');
+    if (isOpen) {
+      setTitle(initialTitle);
+      setContent(initialContent);
     }
-  }, [initialNote, isOpen]);
+  }, [isOpen, initialTitle, initialContent]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-    await onSubmit(title, content);
+  const handleSave = () => {
+    onSave(title, content);
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={initialNote ? 'Edit Note' : 'Create Note'}
-    >
-      <form onSubmit={handleSubmit} className="editor-form">
-        {error && <div className="edit-error">{error}</div>}
-        <div className="form-group">
-          <label htmlFor="note-title">Title</label>
-          <input
-            id="note-title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Note title"
-            className="form-control"
-            disabled={isSubmitting}
-            required
-          />
-        </div>
-        <div className="form-group">
-          <label>Content</label>
-          <RichTextEditor
-            value={content}
-            onChange={setContent}
-            placeholder="Type your note here..."
-            disabled={isSubmitting}
-          />
-        </div>
-        <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn-secondary"
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={isSubmitting || !title.trim()}
-          >
-            {isSubmitting
-              ? 'Saving...'
-              : initialNote
-              ? 'Save Changes'
-              : 'Create Note'}
-          </button>
-        </div>
-      </form>
+    <Modal isOpen={isOpen} onClose={onClose} title={initialTitle ? 'Edit Note' : 'New Note'}>
+      {error && <div className="api-error" role="alert">{error}</div>}
+      <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Give your note a title..."
+          disabled={isSubmitting}
+          style={{ fontSize: '1.1rem', fontWeight: 600, padding: '0.85rem 1rem' }}
+        />
+      </div>
+      <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+        <RichTextEditor
+          value={content}
+          onChange={setContent}
+          placeholder="What's on your mind? (optional)"
+          disabled={isSubmitting}
+        />
+      </div>
+      <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+        <button type="button" className="btn-secondary" onClick={onClose} disabled={isSubmitting}>
+          Cancel
+        </button>
+        <button type="button" className="btn-primary" onClick={handleSave} disabled={isSubmitting}>
+          {isSubmitting ? 'Saving...' : 'Save Note'}
+        </button>
+      </div>
     </Modal>
   );
 };
 
 export default NoteEditorModal;
-
