@@ -1,185 +1,214 @@
-# Memoora - Unified Monorepo (MERN Notes Application)
+# Memoora - Unified Next.js Notes Application
 
 ## 1. Project Overview
-Memoora is a production-grade full-stack personal notes application built using a unified Monorepo structure. It pairs a **React 19 / TypeScript / Vite** single-page application with a **Node.js / Express 5 / Prisma / PostgreSQL** REST API, featuring real-time synchronization over **Socket.io**.
+Memoora is a production-grade full-stack personal notes application built as a **single, unified Next.js App Router application**. It consolidates the frontend user interface and backend REST API route handlers into one cohesive codebase powered by **Next.js 15**, **React 19**, **TypeScript**, **Prisma ORM**, and **PostgreSQL**.
 
 ---
 
-## 2. Monorepo Architecture & Directory Structure
+## 2. Architecture & Directory Structure
 
 ```
 Memora/
-├── backend/                  # Express REST API, Prisma schema, & Socket.io server
-│   ├── prisma/               # Database schema & migrations
-│   ├── src/                  # Controllers, services, routes, middleware, validations, utils
-│   ├── tests/                # Mocha & Chai backend test suites
-│   ├── package.json          # Backend-specific dependencies and scripts
-│   └── .env.example          # Backend environment template
+├── app/                          # Next.js App Router (Pages, Layouts, & API Route Handlers)
+│   ├── (auth)/                   # Route group for authentication
+│   │   ├── login/page.tsx        # Login page
+│   │   └── register/page.tsx     # Registration page
+│   ├── api/                      # Backend API Route Handlers
+│   │   ├── auth/                 # Authentication endpoints
+│   │   │   ├── login/route.ts    # POST /api/auth/login
+│   │   │   ├── register/route.ts # POST /api/auth/register
+│   │   │   ├── logout/route.ts   # POST /api/auth/logout
+│   │   │   └── me/route.ts       # GET /api/auth/me
+│   │   ├── health/route.ts       # GET /api/health
+│   │   └── notes/                # Notes CRUD & batch operations
+│   │       ├── route.ts          # GET /api/notes, POST /api/notes
+│   │       ├── [id]/route.ts     # GET /api/notes/:id, PATCH, DELETE
+│   │       └── import/route.ts   # POST /api/notes/import
+│   ├── dashboard/page.tsx        # Authenticated Notes Dashboard (Live search, pin, export/import)
+│   ├── globals.css               # Global styles, variables, typography
+│   ├── layout.tsx                # Root HTML/Body layout with AuthProvider & Toaster
+│   └── page.tsx                  # Public Landing Page & Features Showcase
 │
-├── frontend/                 # Vite + React 19 + TypeScript frontend application
-│   ├── public/               # Static assets & icons
-│   ├── src/                  # Components, pages, context, services, types
-│   ├── src/__tests__/        # Jest & React Testing Library test suites
-│   ├── package.json          # Frontend-specific dependencies and scripts
-│   └── .env.example          # Frontend environment template
+├── components/                   # Reusable UI Components
+│   ├── Modal.tsx                 # Accessible dialog modal
+│   ├── Navbar.tsx                # Navigation bar with user status & theme
+│   ├── NoteEditorModal.tsx       # Note creation and edit modal
+│   ├── RichTextEditor.tsx        # Formatted text editor (Bold, italic, lists, undo)
+│   └── UserProfileModal.tsx      # User profile detail & sign-out dialog
 │
-├── docs/                     # Architectural, setup, & project documentation
-│   ├── architecture/         # System design & security architecture
-│   ├── api/                  # REST API endpoints documentation
-│   ├── setup/                # Step-by-step setup guides
-│   └── certificates/         # Program documentation & certificates
+├── context/                      # Client-side React State Contexts
+│   └── AuthContext.tsx           # Authentication state, session tracking & lifecycle
 │
-├── .github/                  # CI/CD workflows
-├── .coderabbit.yaml          # CodeRabbit review rules
-├── .editorconfig             # Editor configuration standards
-├── .gitignore                # Root gitignore rules
-├── .prettierrc               # Prettier formatting rules
-├── package.json              # Root orchestration & scripts (npm --prefix + concurrently)
-├── README.md                 # Project guide & reference
-└── sonar-project.properties  # SonarQube multi-project configuration
+├── lib/                          # Core Server & Shared Libraries
+│   ├── auth/                     # Authentication & security utilities
+│   │   ├── auth.ts               # Cookie helpers, JWT verification & CSRF origin validator
+│   │   ├── jwt.ts                # Token signing & verification
+│   │   └── password.ts           # Bcrypt password hashing & comparison
+│   ├── database/                 # Database clients
+│   │   └── prisma.ts             # Server-only Prisma client singleton
+│   ├── logger/                   # Structured logging
+│   │   ├── logger.ts             # Pino logger instance
+│   │   └── http-logger.ts        # Route handler HTTP request wrapper with duration tracking
+│   ├── services/                 # Server-side business logic
+│   │   ├── auth.service.ts       # User registration, authentication, & profile
+│   │   └── notes.service.ts      # Multi-tenant notes CRUD & bulk import transactions
+│   ├── utils/                    # Shared API helpers
+│   │   └── api-error.ts          # Centralized error mapping (Prisma, Zod, AppError)
+│   └── validations/              # Zod validation schemas
+│       └── schemas.ts            # Input validation schemas for auth & notes
+│
+├── prisma/                       # Database Schema & Migrations
+│   ├── migrations/               # PostgreSQL schema migration history
+│   └── schema.prisma             # Prisma database schema definition
+│
+├── public/                       # Static Public Assets
+│   ├── auth-visual.png           # Auth visual asset
+│   ├── hero-visual.png           # Hero illustration
+│   ├── favicon.svg               # Application favicon
+│   ├── icons.svg                 # SVG sprite sheet
+│   └── memoora-icon.svg          # Memoora logo mark
+│
+├── services/                     # Client-side API Service Layer
+│   ├── api.ts                    # Axios client instance with 401 interceptor
+│   ├── auth.service.ts           # Client auth API calls
+│   └── notes.service.ts          # Client notes API calls
+│
+├── tests/                        # Comprehensive Test Suites
+│   ├── backend/                  # Backend unit, integration, & security test suite
+│   │   ├── api-handlers.test.ts  # Route handlers integration tests
+│   │   ├── mock-request.ts       # NextRequest mock utility
+│   │   └── unit.test.ts          # Password hashing, JWT, & Zod schema unit tests
+│   └── frontend/                 # Frontend client logic & services test suite
+│       ├── client-logic.test.ts  # DOMPurify sanitization, CSV export/import, note sorting
+│       └── services.test.ts      # Auth & Notes client services tests
+│
+├── types/                        # TypeScript Type Definitions
+│   ├── auth.types.ts             # User, Session, & Auth API types
+│   └── notes.types.ts            # Note, CreateNoteData, & UpdateNoteData types
+│
+├── docs/                         # Architecture, Setup, and Migration Documentation
+│   ├── api/                      # REST API endpoint specifications
+│   ├── architecture/             # Architecture overview & security model
+│   └── setup/                    # Setup & deployment guides
+│
+├── next.config.ts                # Next.js configuration
+├── tsconfig.json                 # TypeScript compiler configuration
+├── package.json                  # Single root package configuration & scripts
+└── sonar-project.properties      # SonarQube configuration
 ```
 
 ---
 
 ## 3. Technology Stack
 
-### Frontend
-- **Framework**: React 19, TypeScript
-- **Tooling**: Vite 8
-- **Routing**: React Router DOM 7
-- **Sanitization & Security**: DOMPurify
-- **Real-Time Client**: Socket.io Client
-- **Notifications**: React Hot Toast
-- **Testing**: Jest 30, React Testing Library, Babel
-
-### Backend
-- **Framework**: Node.js, Express 5
+- **Framework**: Next.js 15 (App Router), React 19, TypeScript
 - **Database & ORM**: PostgreSQL via Prisma ORM 6
-- **Authentication**: JWT (JSON Web Tokens) with `HttpOnly` and `SameSite: Strict` cookies
-- **Security**: Helmet, CORS origin restriction, custom CSRF origin validation
-- **Real-Time Engine**: Socket.io 4.8
-- **Logging**: Pino & Pino-HTTP structured JSON logging
-- **Validation**: Express-Validator
-- **Testing**: Mocha, Chai, Sinon, Supertest
+- **Authentication**: JWT stored in `HttpOnly`, `SameSite: Strict` cookies
+- **Security & CSRF**: Strict `Origin`/`Referer` validation on state-changing requests, sanitized rich-text with DOMPurify
+- **Input Validation**: Zod runtime schema validation
+- **Logging**: Pino structured JSON logger with HTTP request duration tracking
+- **Testing**: Mocha, Chai, Tsx, JSDOM (41 automated test cases)
+- **Linting & Type Safety**: Oxlint (instant static analysis) and TypeScript compiler (`tsc --noEmit`)
 
 ---
 
-## 4. Prerequisites
-- **Node.js**: v18.0.0 or higher
+## 4. Getting Started
+
+### Prerequisites
+- **Node.js**: v18.18.0 or higher (v20+ recommended)
 - **npm**: v9.0.0 or higher
-- **PostgreSQL**: Local PostgreSQL instance or cloud database (e.g., Supabase)
+- **PostgreSQL**: Local instance or hosted provider (Supabase, Neon, Railway)
 
----
+### Environment Setup
+Create a `.env` file at the repository root based on `.env.example`:
 
-## 5. Quickstart & Installation
+```env
+# Database Connection URL (PostgreSQL)
+DATABASE_URL="postgresql://postgres:password@localhost:5432/memoora_db?schema=public"
 
-From the root directory:
+# Application URL
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+FRONTEND_URL="http://localhost:3000"
 
-```bash
-# 1. Install all dependencies (backend, frontend, and root concurrently)
-npm run install:all
-
-# 2. Configure environment variables
-cp frontend/.env.example frontend/.env
-cp backend/.env.example backend/.env
-```
-
-### Environment Variables Configuration
-
-**Backend (`backend/.env`):**
-```ini
-PORT=5000
-NODE_ENV=development
-LOG_LEVEL=debug
-DATABASE_URL="postgresql://user:password@host:port/database?pgbouncer=true"
-DIRECT_URL="postgresql://user:password@host:port/database"
-JWT_SECRET="your_jwt_secret"
+# JWT Authentication Secret
+JWT_SECRET="your-super-secret-jwt-key-min-32-characters"
 JWT_EXPIRES_IN="7d"
-FRONTEND_URL="http://localhost:5173"
+
+# Node Environment
+NODE_ENV="development"
 ```
 
-**Frontend (`frontend/.env`):**
-```ini
-VITE_API_BASE_URL=http://localhost:5000/api
+### Installation & Database Setup
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Generate Prisma Client
+npm run db:generate
+
+# 3. Apply database schema migrations
+npm run db:push
 ```
 
----
-
-## 6. Running the Applications
-
-### Run both applications concurrently (Recommended for development):
+### Development
+Start the unified Next.js development server:
 ```bash
 npm run dev
 ```
-- Frontend starts on: `http://localhost:5173`
-- Backend API starts on: `http://localhost:5000`
-
-### Run applications independently:
-```bash
-# Start backend API only
-npm run dev:backend
-
-# Start frontend application only
-npm run dev:frontend
-```
+The application will be accessible at [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## 7. Database Setup & Migrations
-```bash
-# Push Prisma schema to the configured PostgreSQL database
-npm run db:push
+## 5. Available Scripts
 
-# Generate Prisma Client
-npm run db:generate
-```
-
----
-
-## 8. Testing & Quality Checks
-
-Run the automated test suites directly from the root repository:
-
-```bash
-# Run all tests (backend + frontend)
-npm test
-
-# Run backend Mocha/Chai tests only
-npm run test:backend
-
-# Run frontend Jest tests only
-npm run test:frontend
-
-# Run backend TypeScript checks
-npm run type-check
-
-# Run linters across backend and frontend
-npm run lint
-
-# Build frontend production bundle
-npm run build
-```
+| Script | Command | Description |
+|---|---|---|
+| `npm run dev` | `next dev` | Starts the Next.js development server |
+| `npm run build` | `next build` | Creates an optimized production build |
+| `npm run start` | `next start` | Runs the built production server |
+| `npm test` | `tsx node_modules/mocha/bin/mocha.js "tests/**/*.test.ts"` | Runs all 41 backend and frontend tests |
+| `npm run test:backend` | `tsx ... "tests/backend/**/*.test.ts"` | Runs backend unit and route handler tests |
+| `npm run test:frontend` | `tsx ... "tests/frontend/**/*.test.ts"` | Runs frontend services and client-logic tests |
+| `npm run type-check` | `tsc --noEmit` | Runs full TypeScript static type checking |
+| `npm run lint` | `oxlint app components lib services context types` | Runs fast Oxlint static analysis |
+| `npm run db:generate` | `prisma generate` | Generates the Prisma Client |
+| `npm run db:push` | `prisma db push` | Pushes the schema state to the database |
+| `npm run db:migrate` | `prisma migrate dev` | Runs Prisma development migrations |
+| `npm run db:studio` | `prisma studio` | Opens the interactive Prisma Studio database GUI |
 
 ---
 
-## 9. SonarQube Analysis
-SonarQube is configured to analyze both frontend and backend source code and coverage reports:
-```properties
-sonar.sources=backend/src,frontend/src
-sonar.tests=backend/tests,frontend/src/__tests__
-sonar.javascript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info
-```
-Run analysis with your local SonarScanner:
-```bash
-sonar-scanner
-```
+## 6. REST API Endpoints
+
+### Authentication
+- `POST /api/auth/register` — Register a new account (`name`, `email`, `password`)
+- `POST /api/auth/login` — Sign in and receive `HttpOnly` JWT cookie (`email`, `password`)
+- `POST /api/auth/logout` — Invalidate session and clear auth cookie
+- `GET /api/auth/me` — Retrieve authenticated user profile
+
+### Notes
+- `GET /api/notes` — Retrieve all notes belonging to the authenticated user
+- `POST /api/notes` — Create a new note (`title`, `content`)
+- `GET /api/notes/:id` — Retrieve note by ID (strictly isolated to owner)
+- `PATCH /api/notes/:id` — Update note title or content
+- `DELETE /api/notes/:id` — Delete note by ID
+- `POST /api/notes/import` — Bulk import notes within a single database transaction
+
+### System
+- `GET /api/health` — Application health check endpoint
 
 ---
 
-## 10. Git Branching & PR Workflow
-- `main`: Production-ready releases.
-- `develop`: Integration branch for completed features.
-- `feature/*`: Dedicated branches for individual features.
-- `chore/*`: Dedicated branches for maintenance and migrations.
+## 7. Security Architecture
 
-All pull requests are reviewed by CodeRabbit and subject to CI linting and automated test runs.
+1. **HttpOnly Cookie Authentication**:
+   - Authentication tokens are stored in secure, `HttpOnly`, `SameSite: Strict` cookies named `jwt`.
+   - In production (`NODE_ENV=production`), `secure: true` is automatically enforced.
+2. **CSRF Protection via Origin & Referer Validation**:
+   - All state-changing route handlers (`POST`, `PATCH`, `DELETE`) validate `Origin` and `Referer` headers against the application host using `new URL().origin`. Cross-origin or missing origin requests are rejected with `403 Forbidden`.
+3. **Multi-Tenant Data Isolation**:
+   - Every database query for notes explicitly filters by `userId` extracted from the verified JWT payload. Users cannot read, modify, or delete another user's notes.
+4. **Rich-Text HTML Sanitization**:
+   - Note contents are sanitized with DOMPurify on display to eliminate XSS vectors (e.g. `<script>`, inline event handlers like `onerror`, `javascript:` URIs) while preserving safe styling tags (`<b>`, `<i>`, `<u>`, `<ul>`, `<ol>`, `<li>`, `<p>`).
+5. **Database Error Redaction**:
+   - Internal database connection errors or syntax exceptions are logged securely on the server with Pino and masked as generic `500 Internal Server Error` responses to prevent information leakage.
