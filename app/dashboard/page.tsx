@@ -376,7 +376,10 @@ export default function DashboardPage() {
         ) : (
           <div className="notes-grid-modern">
             {displayedNotes.map((note) => (
-              <div key={note.id} className="note-card-modern">
+              <div
+                key={note.id}
+                className={`note-card-modern ${pinnedNoteIds.includes(note.id) ? 'pinned' : ''}`}
+              >
                 <div className="note-card-body-modern">
                   <div className="note-card-header-modern">
                     <h4 className="note-card-title-modern">{note.title}</h4>

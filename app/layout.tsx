@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from '@/context/AuthContext';
+import { ThemeProvider } from '@/context/ThemeContext';
 import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
@@ -12,23 +13,57 @@ export const metadata: Metadata = {
   },
 };
 
+const themeScript = `
+  (function() {
+    try {
+      var saved = localStorage.getItem('memoora-theme');
+      var pref = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      var theme = (saved === 'light' || saved === 'dark') ? saved : pref;
+      document.documentElement.setAttribute('data-theme', theme);
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      }
+    } catch(e) {}
+  })();
+`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body>
-        <AuthProvider>
-          <Toaster position="top-right" />
-          <div id="root">
-            <div className="main-layout">
-              <Navbar />
-              <main className="content">{children}</main>
+        <ThemeProvider>
+          <AuthProvider>
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                className: 'memoora-toast',
+                style: {
+                  background: 'var(--bg-card)',
+                  color: 'var(--text-h)',
+                  border: '1px solid var(--border)',
+                  boxShadow: 'var(--shadow-md)',
+                },
+              }}
+            />
+            <div id="root">
+              <div className="main-layout">
+                <Navbar />
+                <main className="content">{children}</main>
+              </div>
             </div>
-          </div>
-        </AuthProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
