@@ -9,7 +9,13 @@ export const metadata: Metadata = {
   title: 'Memoora - Notes Application',
   description: 'Full-stack Notes Application built with Next.js App Router',
   icons: {
-    icon: '/favicon.svg',
+    icon: [
+      { url: '/memoora-icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', type: 'image/x-icon' },
+    ],
+    shortcut: '/memoora-icon.svg',
+    apple: '/memoora-icon.svg',
   },
 };
 
@@ -39,6 +45,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="icon" type="image/svg+xml" href="/memoora-icon.svg" />
+        <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/memoora-icon.svg" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
