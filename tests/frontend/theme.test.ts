@@ -105,3 +105,4 @@ describe('Theme Switcher & Persistence Logic', () => {
     expect(document.documentElement.getAttribute('data-theme')).to.equal('light');
   });
 });
+
